@@ -20,8 +20,20 @@ Local copy: `downloads/Madeira-nicogig-34646764866.ipa`
 `sha256 29b17474e23cc6e4cfecc5f5b8687cd93faac525933a9e53ba00a17a6111e38f`
 62,785,590 bytes · Mach-O arm64 · unsigned · artifact expires **2026-09-18**.
 
-**Reproducible:** run `.github/workflows/build-madeira-ipa.yml` on this fork.
-Cold caches ≈ 3–5 h (the LLVM cross-build dominates). Warm ≈ 35 min.
+**Reproducible (done):** run `.github/workflows/build-madeira-ipa.yml` on this fork.
+
+Run `34684104750` went green in **37m45s on completely cold caches** — the LLVM
+cross-build is far cheaper than it looks, because it builds no targets, tools or
+utils. Budget well under an hour, not the several I first assumed.
+
+Local copy: `downloads/Madeira-own-34684104750.ipa`
+`sha256 17b522303473e3b16e856de3c6e301bfce5a46c45c67b867947e6fb6f8d9a62e`
+
+**Cross-check:** 300 of 306 files are byte-identical between that build and
+nicogig's independent one. The 6 that differ are the main binary (same size,
+18,031,368 bytes — differing only by build host, timestamps and UUID), the four
+DXMT PE DLLs meson rebuilds each run, and one license text file. Two independent
+builds converging is also what clears the downloaded IPA.
 
 Both produce an unsigned IPA. Signing and entitlements are on you.
 
@@ -402,9 +414,33 @@ come first.
 
 ---
 
+## Windows Defender false positive
+
+`Payload/Madeira.app/aarch64-windows/cmd.exe` trips
+`Behavior:Win32/DefenseEvasion.A!ml` if you extract the IPA on Windows. It is a
+false positive, and Defender will silently **delete the copy in your git clone**
+too, breaking a local build.
+
+Evidence it is benign: PE machine type is `0xAA64` (ARM64 — it cannot execute on
+x86-64 Windows at all), it carries `Wine builtin DLL`, `WINEDEBUG` and 26 `wine`
+symbols, and it is byte-identical to what upstream tracks
+(`sha256 385a6f2dcd70cd987d0b515eed6c7e630fd782136abe29f3207f2e5c3019a2e6`). The
+`!ml` suffix means a machine-learning heuristic, not a signature — it fires on a
+file named `cmd.exe` appearing somewhere unexpected.
+
+You do not need to extract the IPA; sideloaders take the `.ipa` as-is. If a local
+build needs the file back: `git checkout -- app/Madeira/aarch64-windows/cmd.exe`,
+after excluding the path from real-time scanning. Note an exclusion also covers
+Wine's `explorer.exe`, `iexplore.exe` and `conhost.exe` in the same folder, which
+trip the same name-based heuristics.
+
+---
+
 ## Local artifacts
 
 ```
+downloads/Madeira-own-34684104750.ipa       built from this fork (unsigned, arm64)
+downloads/Madeira.entitlements              entitlements plist for the signer
 downloads/Madeira-nicogig-34646764866.ipa   the IPA (unsigned, arm64)
 downloads/nicogig/                          that run's .err files, meson logs,
                                             fex.log, and wine config.log
