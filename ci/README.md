@@ -1,3 +1,19 @@
+> **Superseded — not wired to any workflow.**
+>
+> `.github/workflows/build-madeira-ipa.yml` is the build that actually runs. It
+> comes from nicogig/Madeira (originally margooey's PR #5 against upstream) and
+> is a known-green configuration that produces a working IPA.
+>
+> These scripts were written before that was found. They are kept because they
+> are readable stage-by-stage and runnable on a local Mac, and because
+> `05-wineserver-base.sh` keeps the `-include wineserver_ios_kill.h` flag that
+> the PR #5 seeding step drops. Everything else here is worse than the workflow:
+> no LLVM cache pruning (would exceed the 10 GB repo budget), no MSVC runtime
+> extraction, no FEX `Arm64.cpp` patch, no airconv shader-header generation, and
+> a Wine `configure` line that has never been proven to work.
+>
+> Use the workflow. Read these for explanation.
+
 # CI build
 
 Builds `Madeira.app` and packages it as an unsigned `.ipa` for sideloading.
