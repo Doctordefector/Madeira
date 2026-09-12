@@ -14,6 +14,7 @@ The stage scripts are plain bash and run the same way on a local Mac:
 ```sh
 ./ci/00-toolchains.sh     # toolchains/llvm-mingw-*, toolchains/llvm-ios-build   (hours, once)
 ./ci/10-wine.sh           # wine/build-macos
+./ci/05-wineserver-base.sh # app/Madeira/libwineserver.a base  (run after 10, before 30)
 ./ci/20-fex.sh            # FEX/build-ios/**/*.a
 ./ci/30-native-libs.sh    # app/Madeira/lib*.a + DXMT PE DLLs
 ./ci/40-app-ipa.sh        # out/Madeira-unsigned.ipa
@@ -30,9 +31,15 @@ The cache is large and GitHub caps a repo at 10 GB of Actions cache with LRU
 eviction. If IPA builds start failing on the toolchains check again, look at
 **Settings → Actions → Caches**.
 
-### 2. Supply a base `libwineserver.a`
+Runner minutes cost nothing here: standard GitHub-hosted runners, macOS
+included, are free for public repositories. Keep this fork public and the
+whole pipeline is free. The limits that do apply are per-job (6 h) and
+concurrency, not billing.
 
-This is the one hard blocker for a clean-checkout build.
+### 2. The base `libwineserver.a`
+
+Handled automatically — but worth knowing about, because it is the part most
+likely to need attention.
 
 `build/wineserver/build.sh` is a *patch-over* build: it copies an existing
 `app/Madeira/libwineserver.a`, compiles the iOS-specific `*_ios.c` files, swaps
@@ -43,8 +50,19 @@ symbol-rename sweep over every member. With no base archive it stops at:
 ERROR: No base libwineserver.a found
 ```
 
-That archive is in upstream's `.gitignore` and is not published anywhere, so
-CI cannot regenerate it. Supply it one of two ways:
+That archive is in upstream's `.gitignore` and is published nowhere. It is not
+special, though — it is every `wine/server/*.c` compiled for ios-arm64, and
+`build/wineserver/build.sh` already spells out the exact flags. So
+`ci/05-wineserver-base.sh` compiles the full set with those same flags and
+archives the result, and stage 30 falls back to it when no archive is supplied.
+
+The ~18 members `build.sh` replaces have iOS variants precisely because the
+upstream versions do not build for iOS, so failures among those are expected
+and skipped. Anything failing *outside* that set is reported and will surface
+as undefined symbols at app link time — run with `WINESERVER_BASE_STRICT=1` to
+stop on it instead.
+
+To use a known-good archive rather than a rebuilt one:
 
 - set a repository variable `WINESERVER_BASE_URL` to a URL `curl` can fetch, or
 - place the file at `ci/prebuilt/libwineserver.a`.

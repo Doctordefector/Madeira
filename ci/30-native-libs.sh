@@ -11,8 +11,10 @@
 # BASE ARCHIVE: build/wineserver/build.sh is a *patch-over* build. It copies
 # an existing app/Madeira/libwineserver.a and swaps individual .o members
 # into it; with no base archive it exits 1 ("No base libwineserver.a found").
-# That base is gitignored and is not published anywhere, so a clean checkout
-# cannot produce it. Supply it out of band:
+# That base is gitignored and is not published anywhere. It is, however, just
+# wine/server/*.c compiled for ios-arm64, so ci/05-wineserver-base.sh rebuilds
+# one from source and this stage falls back to that automatically. To use a
+# known-good archive instead:
 #   * drop it at ci/prebuilt/libwineserver.a, or
 #   * set WINESERVER_BASE_URL to something curl can fetch.
 
@@ -110,22 +112,10 @@ if [ ! -f "$APP_RES/libwineserver.a" ]; then
         log "fetching base archive from WINESERVER_BASE_URL"
         curl -fL --retry 3 -o "$APP_RES/libwineserver.a" "$WINESERVER_BASE_URL"
     else
-        cat >&2 <<'MSG'
-
-[fail] No base libwineserver.a.
-
-build/wineserver/build.sh does not build the wineserver from scratch — it
-copies an existing app/Madeira/libwineserver.a and replaces individual object
-members inside it. That base archive is gitignored and is not published, so a
-clean checkout cannot produce one.
-
-Supply it one of these ways, then re-run:
-  * commit or mount it at  ci/prebuilt/libwineserver.a
-  * set  WINESERVER_BASE_URL=<url>  (a repo variable/secret works in CI)
-
-MSG
-        exit 1
+        log "no base archive supplied — bootstrapping one from wine/server/*.c"
+        "$CI_DIR/05-wineserver-base.sh"
     fi
+    [ -f "$APP_RES/libwineserver.a" ] || die "still no base libwineserver.a — see ci/README.md"
 fi
 "$REPO_ROOT/build/wineserver/build.sh"
 group_end
