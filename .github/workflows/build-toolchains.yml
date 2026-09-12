@@ -1,0 +1,74 @@
+name: Build toolchains
+
+# Stage 00 only — llvm-mingw + LLVM 15.0.7 cross-built for ios-arm64.
+#
+# Split out of build-ipa.yml because the LLVM cross-build is measured in
+# hours and changes only when LLVM_VERSION / LLVM_MINGW_VERSION change.
+# Run this once; build-ipa.yml then restores the cache it writes.
+#
+# The cache it produces is large. GitHub gives a repo 10 GB of Actions cache
+# and evicts least-recently-used, so if IPA builds start rebuilding LLVM,
+# check Settings -> Actions -> Caches for eviction.
+
+on:
+  workflow_dispatch:
+    inputs:
+      llvm_version:
+        description: LLVM version to cross-build for iOS
+        default: "15.0.7"
+      llvm_mingw_version:
+        description: llvm-mingw release tag
+        default: "20260421"
+      force_rebuild:
+        description: Ignore any existing cache and rebuild from scratch
+        type: boolean
+        default: false
+
+concurrency:
+  group: toolchains-${{ inputs.llvm_version }}-${{ inputs.llvm_mingw_version }}
+  cancel-in-progress: false
+
+jobs:
+  toolchains:
+    runs-on: macos-15
+    timeout-minutes: 360
+    env:
+      LLVM_VERSION: ${{ inputs.llvm_version }}
+      LLVM_MINGW_VERSION: ${{ inputs.llvm_mingw_version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: brew install ninja cmake
+
+      - name: Restore toolchains cache
+        id: cache
+        if: ${{ !inputs.force_rebuild }}
+        uses: actions/cache/restore@v4
+        with:
+          path: toolchains
+          key: toolchains-${{ runner.os }}-llvm${{ inputs.llvm_version }}-mingw${{ inputs.llvm_mingw_version }}-v1
+
+      - name: Build toolchains
+        run: ./ci/00-toolchains.sh
+
+      - name: Save toolchains cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: toolchains
+          key: toolchains-${{ runner.os }}-llvm${{ inputs.llvm_version }}-mingw${{ inputs.llvm_mingw_version }}-v1
+
+      - name: Summary
+        run: |
+          {
+            echo "### Toolchains"
+            echo
+            echo "| item | value |"
+            echo "|---|---|"
+            echo "| llvm-mingw | ${LLVM_MINGW_VERSION} |"
+            echo "| LLVM (iOS) | ${LLVM_VERSION} |"
+            echo "| static libs | $(ls toolchains/llvm-ios-build/lib/*.a 2>/dev/null | wc -l | tr -d ' ') |"
+            echo "| size | $(du -sh toolchains | cut -f1) |"
+          } >> "$GITHUB_STEP_SUMMARY"
